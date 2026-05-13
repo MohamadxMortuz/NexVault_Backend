@@ -28,6 +28,7 @@ const upload = multer({
 router.post('/upload', auth, upload.single('file'), fileController.uploadFile);
 router.get('/my-files', auth, fileController.getUserFiles);
 router.get('/download-history', auth, fileController.getDownloadHistory);
+router.get('/upload-history', auth, fileController.getUploadHistory);
 router.get('/shared/meta/:shareLink', fileController.getFileMeta);
 router.get('/shared/:shareLink', fileController.getSharedFile);
 router.get('/preview/:shareLink', fileController.previewFile);

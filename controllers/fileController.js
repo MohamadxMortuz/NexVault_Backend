@@ -1,5 +1,6 @@
 const File = require('../models/File');
 const DownloadHistory = require('../models/DownloadHistory');
+const UploadHistory = require('../models/UploadHistory');
 const { getBucket } = require('../config/db');
 const { encryptBuffer, decryptBuffer } = require('../utils/encryption');
 const { v4: uuidv4 } = require('uuid');
@@ -38,6 +39,15 @@ exports.uploadFile = async (req, res) => {
     });
 
     await file.save();
+
+    await UploadHistory.create({
+      fileName: file.originalName,
+      fileSize: file.size,
+      mimeType: file.mimeType,
+      shareLink: file.shareLink,
+      expiry: req.body.expiry || 'after-download',
+      uploadedBy: req.userId
+    });
 
     res.status(201).json({
       message: 'File uploaded successfully',
@@ -120,6 +130,10 @@ exports.downloadFile = async (req, res) => {
     if (file.deleteAfterDownload) {
       await File.findByIdAndDelete(file._id);
       await bucket.delete(file.gridfsId);
+      await UploadHistory.findOneAndUpdate(
+        { shareLink: file.shareLink },
+        { deleted: true }
+      );
     }
   } catch (error) {
     console.error('Download error:', error);
@@ -135,6 +149,7 @@ exports.deleteFile = async (req, res) => {
     // Delete from GridFS
     const bucket = getBucket();
     await bucket.delete(file.gridfsId);
+    await UploadHistory.findOneAndUpdate({ shareLink: file.shareLink }, { deleted: true });
 
     res.json({ message: 'File deleted successfully' });
   } catch (error) {
@@ -223,6 +238,15 @@ exports.getDownloadHistory = async (req, res) => {
     res.json({ history });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch download history' });
+  }
+};
+
+exports.getUploadHistory = async (req, res) => {
+  try {
+    const history = await UploadHistory.find({ uploadedBy: req.userId }).sort({ uploadedAt: -1 }).limit(50);
+    res.json({ history });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch upload history' });
   }
 };
 
