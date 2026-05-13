@@ -21,22 +21,23 @@ REST API for NexVault, a secure file sharing system built with Node.js, Express,
 ```
 backend/
 ├── config/
-│   └── db.js              # MongoDB + GridFS connection
+│   └── db.js                    # MongoDB + GridFS connection
 ├── controllers/
-│   ├── authController.js  # Register & login logic
-│   └── fileController.js  # Upload, download, delete, preview, share
+│   ├── authController.js        # Register & login logic
+│   └── fileController.js        # Upload, download, delete, preview, share, history
 ├── middleware/
-│   └── auth.js            # JWT authentication middleware
+│   └── auth.js                  # JWT authentication middleware
 ├── models/
-│   ├── User.js            # User schema (fullName, email, phone, password)
-│   └── File.js            # File schema (GridFS ref, shareLink, encryption metadata)
+│   ├── User.js                  # User schema (fullName, email, phone, password)
+│   ├── File.js                  # File schema (GridFS ref, shareLink, deleteAfterDownload)
+│   └── DownloadHistory.js       # Download history schema per user
 ├── routes/
-│   ├── auth.js            # /api/auth routes
-│   └── files.js           # /api/files routes
+│   ├── auth.js                  # /api/auth routes
+│   └── files.js                 # /api/files routes
 ├── utils/
-│   └── encryption.js      # AES-256-CBC encrypt/decrypt helpers
-├── .env                   # Environment variables
-└── server.js              # Entry point
+│   └── encryption.js            # AES-256-CBC encrypt/decrypt helpers
+├── .env                         # Environment variables
+└── server.js                    # Entry point
 ```
 
 ---
@@ -115,16 +116,17 @@ Server runs on `http://localhost:5001`
 
 ### Files — `/api/files`
 
-| Method | Endpoint                  | Description                  | Auth Required |
-|--------|---------------------------|------------------------------|---------------|
-| POST   | `/upload`                 | Upload a file (encrypted)    | Yes           |
-| GET    | `/my-files`               | Get all files of logged user | Yes           |
-| DELETE | `/:id`                    | Delete a file by ID          | Yes           |
-| GET    | `/download/:shareLink`    | Download file by share link  | No            |
-| GET    | `/shared/:shareLink`      | Download via share link      | No            |
-| GET    | `/preview/:shareLink`     | Preview file inline          | No            |
-| GET    | `/info/:shareLink`        | Get file metadata            | No            |
-| GET    | `/shared/meta/:shareLink` | Get file name, size, type    | No            |
+| Method | Endpoint                  | Description                        | Auth Required |
+|--------|---------------------------|------------------------------------|---------------|
+| POST   | `/upload`                 | Upload a file (encrypted)          | Yes           |
+| GET    | `/my-files`               | Get all files of logged user       | Yes           |
+| GET    | `/download-history`       | Get user's download history        | Yes           |
+| DELETE | `/:id`                    | Delete a file by ID                | Yes           |
+| GET    | `/download/:shareLink`    | Download file by share link        | Optional      |
+| GET    | `/shared/:shareLink`      | Download via share link            | No            |
+| GET    | `/preview/:shareLink`     | Preview file inline                | No            |
+| GET    | `/info/:shareLink`        | Get file metadata                  | No            |
+| GET    | `/shared/meta/:shareLink` | Get file name, size, type          | No            |
 
 > Protected routes require `Authorization: Bearer <token>` header.
 
@@ -136,6 +138,25 @@ Server runs on `http://localhost:5001`
 2. The encrypted buffer is stored in **MongoDB GridFS**
 3. The IV is stored in the GridFS file metadata
 4. On download/preview, the file is fetched from GridFS, decrypted using the stored IV, and streamed to the client
+
+---
+
+## Auto Delete After Download
+
+When a file is uploaded with `expiry: after-download`, the `deleteAfterDownload` flag is set to `true` in the database. After the file is successfully downloaded, the backend automatically:
+1. Deletes the file document from MongoDB
+2. Deletes the encrypted file from GridFS
+
+---
+
+## Download History
+
+Every download by an authenticated user is recorded in the `DownloadHistory` collection with:
+- File name, size, and MIME type
+- User reference
+- Timestamp
+
+Accessible via `GET /api/files/download-history` (last 50 entries).
 
 ---
 

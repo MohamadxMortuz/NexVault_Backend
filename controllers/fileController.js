@@ -1,4 +1,5 @@
 const File = require('../models/File');
+const DownloadHistory = require('../models/DownloadHistory');
 const { getBucket } = require('../config/db');
 const { encryptBuffer, decryptBuffer } = require('../utils/encryption');
 const { v4: uuidv4 } = require('uuid');
@@ -32,7 +33,8 @@ exports.uploadFile = async (req, res) => {
       mimeType: req.file.mimetype,
       shareLink: uuidv4(),
       uploadedBy: req.userId,
-      gridfsId: uploadStream.id
+      gridfsId: uploadStream.id,
+      deleteAfterDownload: req.body.expiry === 'after-download'
     });
 
     await file.save();
@@ -107,9 +109,18 @@ exports.downloadFile = async (req, res) => {
     file.downloads += 1;
     await file.save();
 
+    if (req.userId) {
+      await DownloadHistory.create({ fileName: file.originalName, fileSize: file.size, mimeType: file.mimeType, downloadedBy: req.userId });
+    }
+
     res.setHeader('Content-Disposition', `attachment; filename="${file.originalName}"`);
     res.setHeader('Content-Type', file.mimeType);
     res.send(decrypted);
+
+    if (file.deleteAfterDownload) {
+      await File.findByIdAndDelete(file._id);
+      await bucket.delete(file.gridfsId);
+    }
   } catch (error) {
     console.error('Download error:', error);
     res.status(500).json({ error: 'File download failed' });
@@ -203,6 +214,15 @@ exports.getFileMeta = async (req, res) => {
     res.json({ fileName: file.originalName, size: file.size, type: file.mimeType });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch file info' });
+  }
+};
+
+exports.getDownloadHistory = async (req, res) => {
+  try {
+    const history = await DownloadHistory.find({ downloadedBy: req.userId }).sort({ downloadedAt: -1 }).limit(50);
+    res.json({ history });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch download history' });
   }
 };
 

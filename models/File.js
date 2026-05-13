@@ -9,7 +9,8 @@ const fileSchema = new mongoose.Schema({
   gridfsId: { type: mongoose.Schema.Types.ObjectId, required: true },
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   uploadedAt: { type: Date, default: Date.now },
-  downloads: { type: Number, default: 0 }
+  downloads: { type: Number, default: 0 },
+  deleteAfterDownload: { type: Boolean, default: false }
 });
 
 module.exports = mongoose.model('File', fileSchema);
